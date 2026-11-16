@@ -12,7 +12,7 @@ const LISTEN_HOST = '127.0.0.1';
 const LISTEN_PORT = 27017;
 
 async function handleNewConnection(clientSock: Socket) {
-  console.log('client connected from port:', clientSock.remotePort);
+  console.log('client connected on port:', clientSock.remotePort);
 
   // open a corresponding connection 
   // to mongod server on port 9000
@@ -31,7 +31,7 @@ async function handleNewConnection(clientSock: Socket) {
     c2sBufHolder.buf = Buffer.concat([c2sBufHolder.buf, data]);
     const messages = processBuffer(c2sBufHolder); // to be defined
     messages.forEach(message => {
-      console.log(`C -> S message`, message.header);
+      console.log(`C[${clientSock.remotePort}] -> S message`, message.header);
       console.dir(message.payload, { depth: null });
     });
   });
@@ -43,7 +43,7 @@ async function handleNewConnection(clientSock: Socket) {
     s2cBufHolder.buf = Buffer.concat([s2cBufHolder.buf, data]);
     const messages = processBuffer(s2cBufHolder);
     messages.forEach(message => {
-      console.log('S -> C message', message.header);
+      console.log(`S -> C[${clientSock.remotePort}] message`, message.header);
       console.dir(message.payload, { depth: null });
     })
   });
@@ -54,8 +54,19 @@ async function handleNewConnection(clientSock: Socket) {
     serverSock.destroy();
   });
 
+  clientSock.on('close', () => {
+    console.log(`client disconnected on port: ${clientSock.remotePort}`);
+    clientSock.destroy();
+    serverSock.destroy();
+  });
+
   serverSock.on('error', (error) => {
     console.error(error);
+    clientSock.destroy();
+    serverSock.destroy();
+  });
+
+  serverSock.on('close', () => {
     clientSock.destroy();
     serverSock.destroy();
   });
