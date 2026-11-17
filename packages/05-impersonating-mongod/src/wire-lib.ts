@@ -15,7 +15,7 @@ export type WireMessage = {
     | OpMsgPayload;
 };
 
-type OpQueryPayload = {
+export type OpQueryPayload = {
   _type: 'OP_QUERY';
   flags: number;
   fullCollectionName: string;
@@ -25,7 +25,7 @@ type OpQueryPayload = {
   returnFieldsSelector?: BSON.Document | undefined;
 };
 
-type OpReplyPayload = {
+export type OpReplyPayload = {
   _type: 'OP_REPLY';
   responseFlags: number;
   cursorID: BigInt;
@@ -270,3 +270,72 @@ export function processBuffer(bufHolder: { buf: Buffer }) {
   return messages;
 }
 
+export function encodeMessage({
+  header: {
+    requestID,
+    responseTo,
+    opCode,
+  },
+  payload,
+}: WireMessage): Buffer {
+  
+
+  let payloadBuf: Buffer;
+
+  switch(payload._type) {
+    case 'OP_REPLY':
+      payloadBuf = encodeOpReplyPayload(payload);
+      break;
+
+    //case 'OP_MSG':
+      // TODO
+
+    default:
+      throw new Error(`Unknown opcode: ${payload._type}`);
+  }
+
+  const headerBuf = Buffer.alloc(16);
+
+  const messageLength = headerBuf.length + payloadBuf.length;
+  headerBuf.writeInt32LE(messageLength, 0);
+  headerBuf.writeInt32LE(requestID, 4);
+  headerBuf.writeInt32LE(responseTo, 8);
+  headerBuf.writeInt32LE(opCode, 12);
+
+  return Buffer.concat([headerBuf, payloadBuf]);
+}
+
+function encodeOpReplyPayload(payload: OpReplyPayload): Buffer {
+  const {
+    responseFlags,
+    cursorID,
+    startingFrom,
+    numberReturned,
+    documents,
+  } = payload;
+
+  const responseFlagsBuf = Buffer.alloc(4);
+  responseFlagsBuf.writeInt32LE(responseFlags);
+
+  const cursorIDBuf = Buffer.alloc(8);
+  cursorIDBuf.writeBigInt64LE(cursorID as bigint);
+
+  const startingFromBuf = Buffer.alloc(4);
+  startingFromBuf.writeInt32LE(startingFrom);
+
+  const numberReturnedBuf = Buffer.alloc(4);
+  numberReturnedBuf.writeInt32LE(numberReturned);
+
+  const documentsBuf = documents.reduce(
+    (buf: Buffer, doc) => Buffer.concat([buf, BSON.serialize(doc)]),
+    Buffer.alloc(0)
+  );
+
+  return Buffer.concat([
+    responseFlagsBuf,
+    cursorIDBuf,
+    startingFromBuf,
+    numberReturnedBuf,
+    documentsBuf,
+  ]);
+}
