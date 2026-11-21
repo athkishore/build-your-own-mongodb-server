@@ -287,8 +287,9 @@ export function encodeMessage({
       payloadBuf = encodeOpReplyPayload(payload);
       break;
 
-    //case 'OP_MSG':
-      // TODO
+    case 'OP_MSG':
+      payloadBuf = encodeOpMsgPayload(payload);
+      break;
 
     default:
       throw new Error(`Unknown opcode: ${payload._type}`);
@@ -338,4 +339,86 @@ function encodeOpReplyPayload(payload: OpReplyPayload): Buffer {
     numberReturnedBuf,
     documentsBuf,
   ]);
+}
+
+function encodeOpMsgPayload(payload: OpMsgPayload): Buffer {
+  const {
+    flagBits,
+    sections,
+    checksum,
+  } = payload;
+
+  const flagBitsBuf = Buffer.alloc(4);
+  flagBitsBuf.writeInt32LE(flagBits);
+
+  const sectionsBuf = encodeOpMsgPayloadSections(sections);
+
+  const checksumBuf = checksum !== undefined ? Buffer.alloc(4) : undefined;
+  checksumBuf && checksum !== undefined && checksumBuf.writeInt32LE(checksum);
+
+  return Buffer.concat([
+    flagBitsBuf,
+    sectionsBuf,
+    checksumBuf,
+  ].filter(Boolean as unknown as <T>(x : T | false | null | undefined) => x is T));
+}
+
+function encodeOpMsgPayloadSections(sections: OpMsgPayloadSection[]): Buffer {
+  let sectionsBuf = Buffer.alloc(0);
+
+  for (const section of sections) {
+    switch (section.sectionKind) {
+      case 0: {
+        const {
+          sectionKind,
+          document,
+        } = section;
+        const sectionKindBuf = Buffer.alloc(1);
+        sectionKindBuf.writeUint8(sectionKind);
+
+        const documentBuf = BSON.serialize(document);
+
+        sectionsBuf = Buffer.concat([
+          sectionsBuf,
+          sectionKindBuf,
+          documentBuf,
+        ]);
+
+        break;
+      }
+
+      case 1: {
+        const {
+          sectionKind,
+          documentSequenceIdentifier,
+          documents,
+        } = section;
+
+        const sectionKindBuf = Buffer.alloc(1);
+        sectionKindBuf.writeUint8(sectionKind);
+
+        const documentSequenceIdentifierBuf = Buffer.from(
+          documentSequenceIdentifier,
+          'utf-8'
+        );
+
+        const documentsBuf = documents.reduce((buf: Buffer, doc) =>
+          Buffer.concat([buf, BSON.serialize(doc)])
+        , Buffer.alloc(0));
+
+        const size = 4 + documentSequenceIdentifierBuf.length + documentsBuf.length;
+        const sizeBuf = Buffer.alloc(4);
+        sizeBuf.writeInt32LE(size);
+
+        sectionsBuf = Buffer.concat([
+          sectionsBuf,
+          sizeBuf,
+          documentSequenceIdentifierBuf,
+          documentsBuf,
+        ]);
+      }
+    }
+  }
+
+  return sectionsBuf;
 }
