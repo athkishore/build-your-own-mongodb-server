@@ -1,5 +1,22 @@
 import { OpMsgPayload, OpMsgPayloadSection, WireMessage } from "./wire-lib";
 
+const databases = [
+  {
+    name: 'admin',
+    collections: [],
+  },
+  {
+    name: 'config',
+    collections: [],
+  },
+  {
+    name: 'local',
+    collections: [
+      { name: 'startup_log' },
+    ],
+  },
+];
+
 export function getResponse(message: WireMessage): WireMessage {
   const { header, payload: requestPayload } = message;
   const { opCode, requestID } = header;
@@ -96,7 +113,46 @@ function getOpMsgResponsePayload(payload: OpMsgPayload): OpMsgPayload {
             }
           }
         ]
+      };
+
+    case 'listDatabases': {
+      return {
+        _type: 'OP_MSG',
+        flagBits: 0,
+        sections: [
+          {
+            sectionKind: 0,
+            document: {
+              databases: databases.map(db => ({ name: db.name })),
+              ok: 1,
+            },
+          },
+        ],
+      };
+    }
+
+    case 'listCollections': {
+      const database = databases.find(db => db.name === commandBody.$db);
+
+      return {
+        _type: 'OP_MSG',
+        flagBits: 0,
+        sections: [
+          {
+            sectionKind: 0,
+            document: {
+              cursor: {
+                id: BigInt(0),
+                ns: 'local.$cmd.listCollections',
+                firstBatch: database?.collections
+                  .map(coll => ({ name: coll.name })),
+              },
+              ok: 1,
+            }
+          }
+        ]
       }
+    }
     
     default:
       return {
