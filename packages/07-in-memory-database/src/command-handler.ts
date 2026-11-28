@@ -137,6 +137,26 @@ function getOpMsgResponsePayload(payload: OpMsgPayload): OpMsgPayload {
         ]
       }
     }
+
+    case 'create': {
+      const databaseName = commandBody.$db;
+      const collectionName = commandBody.create;
+      const database = getDatabase(databaseName);
+      database.create(collectionName);
+
+      return {
+        _type: 'OP_MSG',
+        flagBits: 0,
+        sections: [
+          {
+            sectionKind: 0,
+            document: {
+              ok: 1,
+            }
+          }
+        ]
+      }
+    }
     
     default:
       return {

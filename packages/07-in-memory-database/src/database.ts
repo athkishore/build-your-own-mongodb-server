@@ -10,6 +10,12 @@ class Database {
   listCollections() {
     return Object.keys(this.collections).map(name => ({ name }))
   }
+
+  create(name: string) {
+    if (!this.collections[name]) {
+      this.collections[name] = [];
+    }
+  }
 }
 
 const databases: Record<string, Database> = {
